@@ -161,22 +161,16 @@ class LoginOut(BaseModel):
 # -----------------------------------------------------------------------------
 app = FastAPI(title="LB Mecânica Automotiva — API", version="1.0.0", lifespan=lifespan)
 
-# CORS permissivo: se FRONTEND_URL for vazio, "*", "'*'", ou contiver "*",
-# libera tudo via regex. Caso contrário, lista os domínios explicitamente.
-_raw_origins = (FRONTEND_URL or "*").strip().strip('"').strip("'")
-if not _raw_origins or "*" in _raw_origins:
-    cors_kwargs = {"allow_origin_regex": ".*"}
-else:
-    cors_kwargs = {"allow_origins": [o.strip() for o in _raw_origins.split(",") if o.strip()]}
-
+# CORS permissivo: SEMPRE aceita qualquer origin via regex.
+# (Bearer token / sem cookies → seguro permitir.)
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=False,  # usamos Bearer token, não cookies
+    allow_origin_regex=".*",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=600,
-    **cors_kwargs,
 )
 
 

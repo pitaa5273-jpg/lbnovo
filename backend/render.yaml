@@ -28,7 +28,7 @@ services:
       - key: ADMIN_PASS
         value: eaixuxu
       - key: FRONTEND_URL
-        value: "*"
+        value: "ALL"
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
