@@ -5,8 +5,14 @@ export const API_BASE = "https://lb-mecanica.onrender.com";
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 12000,
+  timeout: 6000,
 });
+
+// Short-circuit flag: once an API call fails (CORS / 404 / network), skip
+// subsequent network attempts in this session and use localStorage directly.
+let apiUnavailable = false;
+export const isApiAvailable = () => !apiUnavailable;
+export const markApiDown = () => { apiUnavailable = true; };
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("lb_token");
@@ -14,12 +20,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Generic safe-call: tries the API; on failure falls back to localStorage CRUD
-async function safe(promise, fallback) {
+// Generic safe-call: tries the API (unless previously marked down); on failure falls back.
+async function safe(promiseFactory, fallback) {
+  if (apiUnavailable) {
+    if (typeof fallback === "function") return fallback();
+  }
   try {
-    const res = await promise;
+    const res = await promiseFactory();
     return res.data;
   } catch (err) {
+    apiUnavailable = true;
     if (typeof fallback === "function") return fallback();
     throw err;
   }
@@ -49,32 +59,37 @@ export const authService = {
 function makeCrud(resource) {
   const local = localDB(resource);
   return {
-    list: () => safe(api.get(`/${resource}`), () => local.list()),
-    get: (id) => safe(api.get(`/${resource}/${id}`), () => local.get(id)),
+    list: () => safe(() => api.get(`/${resource}`), () => local.list()),
+    get: (id) => safe(() => api.get(`/${resource}/${id}`), () => local.get(id)),
     create: async (data) => {
+      if (apiUnavailable) return local.create(data);
       try {
         const res = await api.post(`/${resource}`, data);
         const created = res.data || data;
-        local.upsert(created); // mirror locally
+        local.upsert(created);
         return created;
       } catch {
+        apiUnavailable = true;
         return local.create(data);
       }
     },
     update: async (id, data) => {
+      if (apiUnavailable) return local.update(id, data);
       try {
         const res = await api.put(`/${resource}/${id}`, data);
         const updated = res.data || { id, ...data };
         local.upsert(updated);
         return updated;
       } catch {
+        apiUnavailable = true;
         return local.update(id, data);
       }
     },
     remove: async (id) => {
-      try {
-        await api.delete(`/${resource}/${id}`);
-      } catch { /* fallthrough */ }
+      if (!apiUnavailable) {
+        try { await api.delete(`/${resource}/${id}`); }
+        catch { apiUnavailable = true; }
+      }
       local.remove(id);
       return { id };
     },
@@ -93,6 +108,10 @@ export const garantiasService = makeCrud("garantias");
 // ---------- UPLOAD ----------
 export const uploadService = {
   async upload(file, tipo = "manutencao") {
+    if (apiUnavailable) {
+      const dataUrl = await fileToDataURL(file);
+      return { url: dataUrl, name: file.name, tipo, source: "local" };
+    }
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -102,7 +121,7 @@ export const uploadService = {
       });
       return res.data;
     } catch {
-      // Fallback: convert to base64 and store as data URL
+      apiUnavailable = true;
       const dataUrl = await fileToDataURL(file);
       return { url: dataUrl, name: file.name, tipo, source: "local" };
     }
