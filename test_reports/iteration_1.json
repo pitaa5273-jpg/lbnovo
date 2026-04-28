@@ -1,0 +1,75 @@
+{
+  "summary": "Frontend-only e2e testing of LB Mecânica SPA with localStorage fallback. 11/12 flows verified working; 1 warning on Veículos creation that needs verification. CORS errors to https://lb-mecanica.onrender.com are expected and the app transparently falls back to localStorage as designed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Veiculos.jsx form",
+        "issue": "Veículo record not visible in the list immediately after clicking Salvar in the new-vehicle modal. Could be a placeholder-matching issue in the test script OR the form needs a required field (e.g., ano/cliente) that wasn't auto-filled. Manual verification recommended.",
+        "selector": "[data-testid=\"veiculo-new\"] + modal Salvar",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard",
+        "issues": ["All 8 stat cards render correctly (OS Abertas, Em Andamento, Finalizadas, Saldo do Caixa, Entradas, Saídas, Clientes, Veículos) with good dark theme contrast and orange/gold accents as specified."]
+      }
+    ],
+    "console_warnings": [
+      {
+        "component": "Layout.jsx",
+        "issue": "React hydration warning: '<span> cannot be a child of <option>'. A <span> is being rendered inside a native <option> element somewhere in the sidebar/select hierarchy. Non-blocking but should be cleaned up (plain text only inside <option>).",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "flows_verified": {
+    "login_with_local_fallback": "PASS — 'Acesso liberado (modo local)' toast shown; redirects to /dashboard; lb_token and lb_user set in localStorage",
+    "dashboard_stat_cards": "PASS — all 8 cards render",
+    "empresa_save": "PASS",
+    "clientes_create": "PASS — new client appears in list",
+    "veiculos_create": "WARN — record not visible after save (see ui_bugs)",
+    "servicos_create": "PASS",
+    "pecas_create": "PASS",
+    "os_create": "PASS — cliente/veículo selects populated from local data and OS saved",
+    "financeiro_entrada": "PASS",
+    "fechamento_tabs": "PASS — Diário/Semanal/Mensal all present",
+    "backup_export": "PASS — download triggered file lb-mecanica-backup-2026-04-28.json",
+    "sidebar_navigation": "PASS — nav-dashboard, nav-empresa, nav-clientes, nav-veiculos, nav-os, nav-servicos, nav-pecas, nav-financeiro, nav-fechamento, nav-backup all route correctly",
+    "logout": "PASS — redirects to /login"
+  },
+  "flows_not_tested": [
+    "Clientes edit/delete/search",
+    "Veículos edit/delete",
+    "OS: adding serviço and peça from catalog + total auto-update (basic OS save was verified, but line-item addition was not exercised)",
+    "Orçamentos create + convert-to-OS (Send icon button)",
+    "Financeiro: saída entry + saldo update math",
+    "PDF generation via jsPDF",
+    "Logo upload (base64 into localStorage)"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Investigate Veículos creation flow: confirm that creating a vehicle with Placa + Modelo + Cliente via the modal actually persists and displays. May be a missing required field or a UI rendering bug.",
+    "Fix Layout.jsx hydration warning — remove <span> from inside native <option> elements (use plain text or switch to a custom dropdown).",
+    "Manually exercise the flows listed in 'flows_not_tested' (Orçamento → convert to OS, OS line-items with auto total, saída/saldo math, PDF export, logo upload)."
+  ],
+  "critical_code_review_comments": [
+    "API_BASE is hardcoded to https://lb-mecanica.onrender.com in src/services/api.js — acceptable per product choice (frontend-only SPA with localStorage fallback), but consider moving to an env var for future flexibility.",
+    "axios timeout of 12s per request multiplied across ~8 resources on each page load produces many simultaneous CORS failures in the console. Consider a short-circuit flag (e.g., after first failure, set a session flag to skip future API calls) to keep the console clean and speed up page loads in local-only mode.",
+    "Dashboard visible ~1s but OS/Veículo pages load slower due to 12s timeouts on every fetch. UX impact is minor because data loads from localStorage after, but perceived sluggishness could be improved.",
+    "Hydration warning in Layout.jsx (<span> inside <option>) should be fixed — React 19 will be stricter."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "~92% (11/12 core flows PASS, 1 WARN)"},
+  "test_credentials": "lbmecanica / eaixuxu (local fallback, since API is unreachable / CORS blocked)",
+  "seed_data_creation": "Created via UI during test run: 1 Empresa record, 1 Cliente 'Cliente Teste', 1 Serviço 'Troca de óleo', 1 Peça 'Filtro de óleo', 1 OS, 1 Entrada financeira. All persisted to browser localStorage under keys lb_* (cleared each browser session).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Frontend URL: https://lb-oficina-web.preview.emergentagent.com. Login: lbmecanica / eaixuxu (expect 'Acesso liberado (modo local)' toast — the remote API is CORS-blocked and the app uses localStorage fallback, which is the intended design). All data-testids listed in the request are correct. Priority gaps to cover next: (1) Veículos create (possible regression), (2) Orçamento → convert-to-OS flow, (3) OS line-items + auto total, (4) jsPDF export buttons, (5) logo upload in Empresa. Console is noisy with CORS errors — these are expected and not bugs.",
+  "rca_of_the_issue": "Veículos WARN: unable to confirm the created vehicle appears in the list. Likely causes: (a) the modal requires an additional field (ano/marca) that my generic 'input 1' and 'input 2' fill logic did not satisfy, causing a silent validation failure, or (b) there is a legitimate bug where the save does not refresh the list. A manual click-through will distinguish these. Recommend main agent open /veiculos, click veiculo-new, fill all fields manually, and watch for the new record. If the record does not appear, check Veiculos.jsx save handler for a missing setVeiculos() / refresh call after local.create()."
+}

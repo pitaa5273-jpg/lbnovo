@@ -1,0 +1,204 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --lb-black: #0f0f0f;
+    --lb-black-2: #161616;
+    --lb-black-3: #1d1d1d;
+    --lb-orange: #ff6600;
+    --lb-orange-soft: #ff8533;
+    --lb-gold: #d4af37;
+    --lb-gold-soft: #e8c768;
+    --lb-text: #f4f4f4;
+    --lb-text-dim: #9a9a9a;
+    --lb-border: #262626;
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 6%;
+        --foreground: 0 0% 96%;
+        --card: 0 0% 9%;
+        --card-foreground: 0 0% 96%;
+        --popover: 0 0% 9%;
+        --popover-foreground: 0 0% 96%;
+        --primary: 22 100% 50%;
+        --primary-foreground: 0 0% 6%;
+        --secondary: 0 0% 14%;
+        --secondary-foreground: 0 0% 96%;
+        --muted: 0 0% 14%;
+        --muted-foreground: 0 0% 60%;
+        --accent: 22 100% 50%;
+        --accent-foreground: 0 0% 6%;
+        --destructive: 0 75% 50%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 16%;
+        --input: 0 0% 14%;
+        --ring: 22 100% 50%;
+        --radius: 0.6rem;
+    }
+}
+
+* {
+    border-color: hsl(var(--border));
+    box-sizing: border-box;
+}
+
+html, body, #root {
+    background-color: var(--lb-black);
+    color: var(--lb-text);
+    min-height: 100vh;
+}
+
+body {
+    margin: 0;
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background:
+        radial-gradient(1100px 600px at 12% -10%, rgba(255, 102, 0, 0.10), transparent 60%),
+        radial-gradient(900px 600px at 110% 10%, rgba(212, 175, 55, 0.06), transparent 60%),
+        var(--lb-black);
+    background-attachment: fixed;
+}
+
+.font-display { font-family: 'Bebas Neue', 'Outfit', sans-serif; letter-spacing: 0.02em; }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+
+::selection { background: var(--lb-orange); color: #000; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0a0a0a; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--lb-orange); }
+
+.lb-card {
+    background: linear-gradient(180deg, #161616 0%, #111111 100%);
+    border: 1px solid var(--lb-border);
+    border-radius: 14px;
+    transition: border-color 220ms ease, transform 220ms ease, box-shadow 220ms ease;
+}
+.lb-card:hover {
+    border-color: rgba(255, 102, 0, 0.35);
+    box-shadow: 0 14px 40px -18px rgba(255, 102, 0, 0.35);
+}
+
+.lb-stat-card {
+    position: relative;
+    overflow: hidden;
+}
+.lb-stat-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--lb-orange), var(--lb-gold));
+    opacity: 0.85;
+}
+
+.lb-btn-primary {
+    background: var(--lb-orange);
+    color: #0a0a0a;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 10px 18px;
+    transition: background-color 180ms ease, transform 180ms ease, box-shadow 220ms ease;
+    border: 1px solid rgba(255, 102, 0, 0.6);
+}
+.lb-btn-primary:hover {
+    background: #ff7a1a;
+    box-shadow: 0 10px 28px -10px rgba(255, 102, 0, 0.7);
+    transform: translateY(-1px);
+}
+
+.lb-btn-ghost {
+    background: transparent;
+    color: var(--lb-text);
+    border: 1px solid var(--lb-border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    transition: border-color 180ms ease, color 180ms ease, background-color 180ms ease;
+}
+.lb-btn-ghost:hover {
+    border-color: var(--lb-orange);
+    color: var(--lb-orange);
+}
+
+.lb-input,
+input.lb-input,
+textarea.lb-input,
+select.lb-input {
+    background: #0e0e0e;
+    border: 1px solid var(--lb-border);
+    color: var(--lb-text);
+    border-radius: 10px;
+    padding: 10px 14px;
+    width: 100%;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.lb-input:focus {
+    outline: none;
+    border-color: var(--lb-orange);
+    box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+}
+
+.lb-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #2a2a2a, transparent);
+}
+
+.lb-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.lb-table th {
+    text-align: left;
+    color: var(--lb-text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--lb-border);
+    background: #0e0e0e;
+}
+.lb-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #1c1c1c;
+    color: var(--lb-text);
+    font-size: 14px;
+}
+.lb-table tr:hover td { background: rgba(255, 102, 0, 0.04); }
+
+.lb-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid;
+}
+.lb-badge-orange { color: var(--lb-orange); border-color: rgba(255,102,0,0.4); background: rgba(255,102,0,0.08); }
+.lb-badge-gold { color: var(--lb-gold); border-color: rgba(212,175,55,0.4); background: rgba(212,175,55,0.08); }
+.lb-badge-green { color: #4ade80; border-color: rgba(74,222,128,0.4); background: rgba(74,222,128,0.08); }
+.lb-badge-red { color: #f87171; border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+.lb-badge-gray { color: #9a9a9a; border-color: #2a2a2a; background: #181818; }
+
+@keyframes lb-fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.lb-anim-in { animation: lb-fadeUp 320ms ease both; }
+
+.lb-grain {
+    position: relative;
+}
+.lb-grain::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.5;
+    pointer-events: none;
+    border-radius: inherit;
+}
