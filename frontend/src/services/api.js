@@ -1,7 +1,7 @@
 import axios from "axios";
 import { localDB } from "./localDB";
 
-export const API_BASE = "https://lb-mecanica.onrender.com";
+export const API_BASE = "https://lbnovo.onrender.com";
 
 const api = axios.create({
   baseURL: API_BASE,
