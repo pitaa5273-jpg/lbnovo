@@ -17,7 +17,7 @@ export default function Veiculos() {
   };
   useEffect(() => { load(); }, []);
 
-  const startNew = () => { setEditing({ marca: "", modelo: "", placa: "", ano: "", cor: "", km: "", clienteId: "" }); setOpen(true); };
+  const startNew = () => { setEditing({ marca: "", modelo: "", placa: "", ano: "", cor: "", km: "", combustivel: "", clienteId: "" }); setOpen(true); };
   const startEdit = (v) => { setEditing({ ...v }); setOpen(true); };
   const save = async () => {
     if (!editing.placa || !editing.modelo) return toast.error("Placa e modelo são obrigatórios");
@@ -75,6 +75,19 @@ export default function Veiculos() {
             <Inp label="Ano" value={editing.ano} onChange={(v) => setEditing({ ...editing, ano: v })} />
             <Inp label="Cor" value={editing.cor} onChange={(v) => setEditing({ ...editing, cor: v })} />
             <Inp label="KM" value={editing.km} onChange={(v) => setEditing({ ...editing, km: v })} />
+            <label className="block">
+              <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Combustível</div>
+              <select className="lb-input" value={editing.combustivel || ""} onChange={(e) => setEditing({ ...editing, combustivel: e.target.value })}>
+                <option value="">— Selecione —</option>
+                <option value="Gasolina">Gasolina</option>
+                <option value="Etanol">Etanol</option>
+                <option value="Flex">Flex</option>
+                <option value="Diesel">Diesel</option>
+                <option value="GNV">GNV</option>
+                <option value="Híbrido">Híbrido</option>
+                <option value="Elétrico">Elétrico</option>
+              </select>
+            </label>
             <label className="block sm:col-span-2">
               <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Cliente</div>
               <select className="lb-input" value={editing.clienteId || ""} onChange={(e) => setEditing({ ...editing, clienteId: e.target.value })}>

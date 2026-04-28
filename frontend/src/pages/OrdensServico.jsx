@@ -84,6 +84,10 @@ export default function OrdensServico() {
       clienteId: it.clienteId, clienteNome: cli?.nome,
       veiculoId: it.veiculoId, veiculoLabel: vei ? `${vei.marca} ${vei.modelo} (${vei.placa})` : "",
       prazo, inicio: inicio.toISOString(), fim: fim.toISOString(),
+      servicos: it.servicos || [],
+      pecas: it.pecas || [],
+      descricao: it.descricao || "",
+      valorTotal: it.valorTotal || 0,
       itens: [...(it.servicos || []), ...(it.pecas || [])].map((x) => ({ descricao: x.nome })),
     });
     toast.success("Garantia gerada");
@@ -305,8 +309,8 @@ function LineTable({ rows, onChange, onRemove }) {
           {rows.map((r, idx) => (
             <tr key={r.id || idx}>
               <td><input className="lb-input !py-1.5" value={r.nome} onChange={(e) => onChange(idx, "nome", e.target.value)} /></td>
-              <td><input className="lb-input !py-1.5" type="number" min="1" value={r.quantidade} onChange={(e) => onChange(idx, "quantidade", Number(e.target.value))} /></td>
-              <td><input className="lb-input !py-1.5" type="number" step="0.01" value={r.valor} onChange={(e) => onChange(idx, "valor", Number(e.target.value))} /></td>
+              <td><input className="lb-input !py-1.5" type="number" min="1" value={r.quantidade ?? 1} onFocus={(e) => e.target.select()} onChange={(e) => onChange(idx, "quantidade", e.target.value === "" ? "" : Number(e.target.value))} /></td>
+              <td><input className="lb-input !py-1.5" type="number" step="0.01" value={r.valor ?? 0} onFocus={(e) => e.target.select()} onChange={(e) => onChange(idx, "valor", e.target.value === "" ? "" : Number(e.target.value))} /></td>
               <td className="font-mono text-[#d4af37]">{brl(Number(r.valor || 0) * Number(r.quantidade || 1))}</td>
               <td><button className="text-zinc-400 hover:text-red-400" onClick={() => onRemove(idx)}><Trash2 className="h-4 w-4" /></button></td>
             </tr>

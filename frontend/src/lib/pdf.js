@@ -272,44 +272,215 @@ export function gerarPDF_Orcamento({ empresa, orcamento, cliente, veiculo }) {
 
 export function gerarPDF_Garantia({ empresa, garantia, os, cliente, veiculo }) {
   const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
   let y = drawHeader(doc, empresa, `TERMO DE GARANTIA #${garantia?.numero || garantia?.id || ""}`);
 
   doc.setFontSize(9);
   doc.setTextColor(...GRAY);
-  doc.text(`OS de origem: #${os?.numero || os?.id || "—"}    •    Prazo: ${garantia?.prazo || "—"} dias    •    Início: ${fmtDate(garantia?.inicio || garantia?.createdAt)}    •    Fim: ${fmtDate(garantia?.fim)}`, 14, y);
-  y += 6;
+  doc.text(
+    `OS de origem: #${os?.numero || garantia?.osNumero || "—"}    •    Início: ${fmtDate(garantia?.inicio || garantia?.createdAt)}    •    Fim: ${fmtDate(garantia?.fim)}`,
+    14, y
+  );
+  y += 7;
 
-  y = clienteVeiculoBlock(doc, y, cliente, veiculo);
+  const sectionTitle = (text) => {
+    doc.setFillColor(...ORANGE);
+    doc.rect(14, y - 4, 3, 6, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...DARK);
+    doc.text(text, 20, y);
+    y += 6;
+  };
+  const para = (text, indent = 14, opts = {}) => {
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setFontSize(opts.size || 9);
+    doc.setTextColor(opts.color || 60);
+    const w = pageW - 28 - (indent - 14);
+    const lines = doc.splitTextToSize(text, w);
+    if (y + lines.length * 4 > 275) { doc.addPage(); y = 20; }
+    doc.text(lines, indent, y);
+    y += lines.length * 4 + (opts.gap ?? 1);
+  };
+  const kv = (label, value, x = 14, w = 60) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...DARK);
+    doc.text(label, x, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60);
+    const v = String(value || "—");
+    const lines = doc.splitTextToSize(v, w);
+    doc.text(lines, x + 22, y);
+    return lines.length * 4;
+  };
 
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...DARK);
-  doc.setFontSize(10);
-  doc.text("CONDIÇÕES DA GARANTIA", 14, y);
-  y += 5;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(60);
-  const texto = garantia?.condicoes ||
-    "A LB Mecânica Automotiva garante os serviços e peças aplicados conforme descrito na ordem de serviço, contra defeitos de execução, pelo prazo definido acima, contado a partir da data de saída do veículo. Ficam excluídos da garantia: (i) desgaste natural; (ii) mau uso ou negligência; (iii) intervenções de terceiros; (iv) acidentes; (v) componentes não substituídos por nossa oficina.";
-  const wrapped = doc.splitTextToSize(texto, 180);
-  doc.text(wrapped, 14, y + 4);
-  y += wrapped.length * 4 + 8;
+  // ===== DADOS DO CLIENTE =====
+  sectionTitle("DADOS DO CLIENTE");
+  const startY = y;
+  const h1 = kv("Nome:", cliente?.nome, 14, 75);
+  const h2 = kv("Telefone:", cliente?.telefone, 110, 75);
+  y = startY + Math.max(h1, h2) + 1;
+  const sy2 = y;
+  const h3 = kv("CPF/CNPJ:", cliente?.documento, 14, 75);
+  const h4 = kv("E-mail:", cliente?.email, 110, 75);
+  y = sy2 + Math.max(h3, h4) + 4;
 
-  if (garantia?.itens?.length) {
+  // ===== DADOS DO VEÍCULO =====
+  sectionTitle("DADOS DO VEÍCULO");
+  const sy3 = y;
+  const v1 = kv("Placa:", veiculo?.placa, 14, 75);
+  const v2 = kv("Marca/Modelo:", `${veiculo?.marca || ""} ${veiculo?.modelo || ""}`.trim(), 110, 75);
+  y = sy3 + Math.max(v1, v2) + 1;
+  const sy4 = y;
+  const v3 = kv("Ano:", veiculo?.ano, 14, 30);
+  const v4 = kv("KM:", veiculo?.km, 60, 30);
+  const v5 = kv("Combustível:", veiculo?.combustivel, 110, 50);
+  y = sy4 + Math.max(v3, v4, v5) + 5;
+
+  // ===== PERÍODO DE GARANTIA =====
+  sectionTitle("PERÍODO DE GARANTIA");
+  const prazo = garantia?.prazo || 90;
+  const prazoExt = numeroPorExtenso(prazo);
+  para(
+    `A garantia dos serviços executados é de ${prazo} (${prazoExt}) dias, contados a partir da data de entrega do veículo, nos termos do art. 26 do Código de Defesa do Consumidor.`,
+    14, { gap: 3 }
+  );
+  y += 2;
+
+  // ===== SERVIÇOS EXECUTADOS =====
+  sectionTitle("SERVIÇOS EXECUTADOS");
+  const servicos = (garantia?.servicos || os?.servicos || []);
+  if (servicos.length) {
     autoTable(doc, {
       startY: y,
-      head: [["Item Coberto", "Observação"]],
-      body: garantia.itens.map((i) => [i.descricao || i.nome || "—", i.observacao || "—"]),
+      head: [["Serviço", "Qtd", "Valor Unit.", "Subtotal"]],
+      body: servicos.map((s) => [
+        s.nome || s.descricao || "—",
+        s.quantidade || 1,
+        brl(s.valor),
+        brl(Number(s.valor || 0) * Number(s.quantidade || 1)),
+      ]),
+      headStyles: { fillColor: ORANGE, textColor: 255, fontStyle: "bold" },
+      styles: { fontSize: 9 },
+      theme: "striped",
+      margin: { left: 14, right: 14 },
+    });
+    y = doc.lastAutoTable.finalY + 4;
+  } else if (garantia?.descricao || os?.descricao) {
+    para(garantia?.descricao || os?.descricao, 14, { gap: 3 });
+  } else {
+    para("—", 14);
+  }
+
+  // ===== PEÇAS SUBSTITUÍDAS / APLICADAS =====
+  sectionTitle("PEÇAS SUBSTITUÍDAS / APLICADAS");
+  const pecas = (garantia?.pecas || os?.pecas || []);
+  if (pecas.length) {
+    autoTable(doc, {
+      startY: y,
+      head: [["Peça / Especificação", "Qtd", "Valor Unit.", "Subtotal"]],
+      body: pecas.map((p) => [
+        p.nome || p.descricao || "—",
+        p.quantidade || 1,
+        brl(p.valor),
+        brl(Number(p.valor || 0) * Number(p.quantidade || 1)),
+      ]),
       headStyles: { fillColor: GOLD, textColor: 255, fontStyle: "bold" },
       styles: { fontSize: 9 },
       theme: "striped",
       margin: { left: 14, right: 14 },
     });
+    y = doc.lastAutoTable.finalY + 4;
+  } else {
+    para("—", 14);
   }
 
-  signatureBlock(doc);
+  // ===== CONDIÇÕES DA GARANTIA =====
+  sectionTitle("CONDIÇÕES DE GARANTIA");
+  const cond = [
+    "1. A garantia cobre exclusivamente os serviços executados e as peças efetivamente descritas neste termo.",
+    "2. A garantia compreende a correção de eventuais vícios de serviço ou defeitos de instalação, desde que constatado nexo entre o serviço realizado e o problema apresentado.",
+    "3. A garantia não cobre:",
+    "    • desgaste natural decorrente do uso regular do veículo;",
+    "    • danos causados por mau uso, negligência ou utilização em condições inadequadas;",
+    "    • acidentes, colisões, alagamentos ou eventos de força maior;",
+    "    • problemas decorrentes de manutenção inadequada ou não realização de revisões recomendadas pelo fabricante.",
+    "4. A realização de reparos ou intervenções por terceiros não autorizados poderá acarretar a perda da garantia, desde que haja relação com o defeito apresentado.",
+    "5. Em caso de eventual problema, o cliente deverá encaminhar o veículo à oficina para análise técnica prévia, sendo vedada a execução de reparos sem autorização da empresa.",
+    "6. Constatado que o defeito decorre dos serviços prestados, a empresa realizará o reparo sem custo adicional ao cliente, dentro de prazo razoável.",
+    "7. Custos de deslocamento ou transporte do veículo até a oficina serão de responsabilidade do cliente, salvo acordo expresso em contrário ou quando comprovada a responsabilidade exclusiva da empresa.",
+  ];
+  cond.forEach((c) => para(c, 14, { gap: 0 }));
+  y += 2;
+
+  // ===== CIÊNCIA DO CLIENTE =====
+  if (y > 230) { doc.addPage(); y = 20; }
+  sectionTitle("CIÊNCIA DO CLIENTE");
+  para("O cliente declara que:", 14, { gap: 1 });
+  [
+    "• foi devidamente informado sobre os serviços realizados;",
+    "• recebeu orientações básicas de uso e manutenção;",
+    "• está ciente das condições de garantia acima descritas;",
+    "• recebeu o veículo após a execução dos serviços, ciente de suas condições aparentes de funcionamento.",
+  ].forEach((c) => para(c, 18, { gap: 0 }));
+  y += 3;
+
+  // ===== VALOR DOS SERVIÇOS =====
+  sectionTitle("VALOR DOS SERVIÇOS");
+  const total = Number(garantia?.valorTotal ?? os?.valorTotal ?? 0);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...DARK);
+  doc.text("Valor total:", 14, y);
+  doc.setTextColor(...ORANGE);
+  doc.text(brl(total), 42, y);
+  y += 7;
+
+  // Local e data
+  const cidade = (empresa?.endereco || "").split(",").slice(-2, -1)[0]?.trim() || empresa?.cidade || "_______________";
+  const dataStr = fmtDate(garantia?.inicio || new Date());
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK);
+  doc.text(`Local e Data: ${cidade}, ${dataStr}`, 14, y);
+  y += 12;
+
+  // ===== ASSINATURAS =====
+  if (y > 250) { doc.addPage(); y = 30; }
+  doc.setDrawColor(120);
+  doc.setLineWidth(0.3);
+  doc.line(20, y + 8, 90, y + 8);
+  doc.line(115, y + 8, 185, y + 8);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Assinatura do Cliente", 55, y + 13, { align: "center" });
+  doc.text(empresa?.nome || "Assinatura da Empresa", 150, y + 13, { align: "center" });
+
   drawFooter(doc);
   doc.save(`Garantia_${garantia?.numero || garantia?.id || "documento"}.pdf`);
+}
+
+// utilitário simples para extenso de inteiro pequeno (1-365 cobrindo prazos típicos)
+function numeroPorExtenso(n) {
+  const u = ["zero","um","dois","três","quatro","cinco","seis","sete","oito","nove","dez","onze","doze","treze","catorze","quinze","dezesseis","dezessete","dezoito","dezenove"];
+  const d = ["","","vinte","trinta","quarenta","cinquenta","sessenta","setenta","oitenta","noventa"];
+  const c = ["","cento","duzentos","trezentos","quatrocentos","quinhentos","seiscentos","setecentos","oitocentos","novecentos"];
+  if (n == null || isNaN(n)) return "";
+  n = Math.floor(Number(n));
+  if (n < 20) return u[n];
+  if (n < 100) {
+    const dz = Math.floor(n / 10), un = n % 10;
+    return un === 0 ? d[dz] : `${d[dz]} e ${u[un]}`;
+  }
+  if (n === 100) return "cem";
+  if (n < 1000) {
+    const ce = Math.floor(n / 100), rest = n % 100;
+    const ceText = ce === 1 ? "cento" : c[ce];
+    return rest === 0 ? ceText : `${ceText} e ${numeroPorExtenso(rest)}`;
+  }
+  return String(n);
 }
 
 export function gerarPDF_Fechamento({ empresa, periodo, lancamentos, totais }) {
