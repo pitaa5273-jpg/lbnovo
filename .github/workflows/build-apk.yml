@@ -3,9 +3,6 @@ name: Build Android APK
 on:
   push:
     branches: ["**"]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/build-apk.yml"
   workflow_dispatch:
 
 permissions:
@@ -14,10 +11,7 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: frontend
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -27,8 +21,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "yarn"
-          cache-dependency-path: frontend/yarn.lock
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -36,52 +28,68 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+      - name: Show Android SDK info
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la $ANDROID_HOME 2>/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed 2>/dev/null | head -40 || true
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+
+      - name: Install dependencies (yarn)
+        working-directory: frontend
+        run: |
+          # não usa --frozen-lockfile pra tolerar pequenas variações pós-merge
+          yarn install --network-timeout 100000
 
       - name: Build React (CRA)
-        run: CI=false yarn build
+        working-directory: frontend
+        env:
+          CI: "false"
+        run: yarn build
 
-      - name: Generate icons & splash assets
+      - name: Generate icon/splash assets (PIL)
+        working-directory: frontend
         run: |
-          python3 scripts/generate_assets.py || true
-          npx -y @capacitor/assets@^3 generate --android \
-            --iconBackgroundColor "#0f0f0f" \
-            --iconBackgroundColorDark "#0f0f0f" \
-            --splashBackgroundColor "#0f0f0f" \
-            --splashBackgroundColorDark "#0f0f0f" \
-            --assetPath resources
+          python3 -m pip install --quiet --user Pillow
+          python3 scripts/generate_assets.py || echo "asset script failed, continuing"
+          ls -la resources/
 
-      - name: Add Android platform (fresh)
+      - name: Add Android platform (clean)
+        working-directory: frontend
         run: |
           rm -rf android
           npx cap add android
           npx cap copy android
           npx cap sync android
 
-      - name: Re-apply icons after platform add
+      - name: Apply icons & splash to Android
+        working-directory: frontend
         run: |
           npx -y @capacitor/assets@^3 generate --android \
             --iconBackgroundColor "#0f0f0f" \
             --iconBackgroundColorDark "#0f0f0f" \
             --splashBackgroundColor "#0f0f0f" \
             --splashBackgroundColorDark "#0f0f0f" \
-            --assetPath resources
+            --assetPath resources || echo "icon generation skipped"
 
-      - name: Patch app version & label
+      - name: Patch app version
+        working-directory: frontend
         run: |
           set -e
-          # Define versionName / versionCode via env so cada build é único
           VC=${GITHUB_RUN_NUMBER:-1}
           VN="1.0.${VC}"
-          sed -i "s/versionCode 1/versionCode ${VC}/" android/app/build.gradle || true
-          sed -i "s/versionName \"1.0\"/versionName \"${VN}\"/" android/app/build.gradle || true
-          echo "App version: ${VN} (code ${VC})"
+          # editar versionCode/versionName se existirem
+          if grep -q "versionCode 1" android/app/build.gradle; then
+            sed -i "s/versionCode 1/versionCode ${VC}/" android/app/build.gradle
+          fi
+          if grep -q 'versionName "1.0"' android/app/build.gradle; then
+            sed -i "s/versionName \"1.0\"/versionName \"${VN}\"/" android/app/build.gradle
+          fi
+          echo "Building version ${VN} (code ${VC})"
+          grep -E "versionCode|versionName" android/app/build.gradle | head -4
 
       - name: Build debug APK
         working-directory: frontend/android
@@ -91,30 +99,32 @@ jobs:
 
       - name: Locate APK
         id: apk
+        working-directory: frontend
         run: |
           APK=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
-          echo "Path: $APK"
-          echo "path=$APK" >> $GITHUB_OUTPUT
+          echo "APK encontrado: $APK"
           NAME="lb-mecanica-v1.0.${GITHUB_RUN_NUMBER}.apk"
           cp "$APK" "../$NAME"
-          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "fullpath=$NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Upload APK as artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.apk.outputs.name }}
-          path: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.fullpath }}
           if-no-files-found: error
+          retention-days: 30
 
-      - name: Create Release (on push to main/master)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      - name: Create GitHub Release (main / master / principal)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/principal'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-v1.0.${{ github.run_number }}
           name: "LB Mecânica APK v1.0.${{ github.run_number }}"
           body: |
-            APK gerado automaticamente a partir do commit ${{ github.sha }}.
+            APK gerado automaticamente do commit ${{ github.sha }}.
             Backend: https://lbnovo.onrender.com
             Login: lbmecanica / eaixuxu
-          files: ${{ steps.apk.outputs.name }}
+          files: ${{ steps.apk.outputs.fullpath }}
           fail_on_unmatched_files: false
