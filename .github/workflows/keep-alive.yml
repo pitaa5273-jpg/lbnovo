@@ -1,0 +1,37 @@
+name: Keep Render awake
+
+# Pings the Render backend every ~10 minutes so the free dyno never
+# goes to sleep (Render free tier sleeps after ~15 min of inactivity).
+# Also runnable on demand via the Actions tab.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping backend
+        run: |
+          set -e
+          URL="https://lbnovo.onrender.com/"
+          echo "Pinging $URL"
+          # --max-time 90 covers the worst-case Render cold start.
+          # --retry 3 retries on transient network errors.
+          STATUS=$(curl -sS -o /dev/null \
+                       -w "%{http_code}" \
+                       --max-time 90 \
+                       --retry 3 \
+                       --retry-delay 5 \
+                       "$URL")
+          echo "HTTP $STATUS"
+          # Any 2xx/3xx/4xx means the server is awake (5xx or 000 = problem).
+          case "$STATUS" in
+            2*|3*|4*) echo "Server is awake."; exit 0 ;;
+            *) echo "Unexpected status $STATUS"; exit 1 ;;
+          esac
