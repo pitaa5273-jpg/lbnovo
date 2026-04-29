@@ -82,7 +82,7 @@ export default function Layout({ children }) {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="flex items-center justify-between px-6 py-4 border-b border-[#1e1e1e] bg-[#0e0e0e]/80 backdrop-blur-md">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.25em] text-[#d4af37]">Painel</div>
+            <div className="text-[10px] uppercase tracking-[0.25em] text-[#d4af37]">LB Mecânica</div>
             <h1 className="font-display text-2xl text-zinc-100" data-testid="page-title">{current}</h1>
           </div>
           <div className="hidden sm:flex items-center gap-3">
