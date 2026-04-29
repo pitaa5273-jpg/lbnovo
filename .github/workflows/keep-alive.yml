@@ -19,7 +19,7 @@ jobs:
       - name: Ping backend
         run: |
           set -e
-          URL="https://lbnovo.onrender.com/"
+          URL="https://lbnovo.onrender.com/health"
           echo "Pinging $URL"
           # --max-time 90 covers the worst-case Render cold start.
           # --retry 3 retries on transient network errors.

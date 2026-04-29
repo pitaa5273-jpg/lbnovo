@@ -218,6 +218,13 @@ async def health():
     }
 
 
+@app.get("/health")
+async def health_check():
+    """Lightweight liveness probe for keep-alive pings and uptime monitors.
+    Intentionally does no DB or external calls — it just answers 'ok' fast."""
+    return {"status": "ok"}
+
+
 # -----------------------------------------------------------------------------
 # CRUD genérico para todos os recursos
 # -----------------------------------------------------------------------------
