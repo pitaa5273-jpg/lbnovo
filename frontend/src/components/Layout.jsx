@@ -99,23 +99,30 @@ export default function Layout({ children }) {
         </header>
 
         {/* Mobile nav */}
-        <div className="lg:hidden flex overflow-x-auto gap-2 px-3 py-2 border-b border-[#1e1e1e] bg-[#0c0c0c]">
+        <nav className="lg:hidden flex overflow-x-auto gap-2 px-3 py-2 border-b border-[#1e1e1e] bg-[#0c0c0c]" role="navigation" aria-label="Mobile navigation">
           {NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-1.5 rounded-md text-xs whitespace-nowrap border ${
-                  isActive ? "border-[#ff6600] text-[#ff6600] bg-[#1a0f06]" : "border-[#262626] text-zinc-300"
+                `flex items-center gap-2 px-3 py-1.5 rounded-md text-xs whitespace-nowrap border transition-colors ${
+                  isActive ? "border-[#ff6600] text-[#ff6600] bg-[#1a0f06]" : "border-[#262626] text-zinc-300 hover:text-[#ff6600]"
                 }`
               }
+              title={label}
             >
-              <Icon className="h-3.5 w-3.5" /> {label}
+              <Icon className="h-3.5 w-3.5 flex-shrink-0" /> <span className="hidden sm:inline">{label}</span>
             </NavLink>
           ))}
-        </div>
+        </nav>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 lb-anim-in">{children}</main>
+
+        {/* Rodapé com marca d'água */}
+        <footer className="px-4 sm:px-6 lg:px-8 py-3 border-t border-[#1e1e1e] bg-[#0c0c0c] flex items-center justify-between text-[10px] text-zinc-500">
+          <div className="text-xs text-zinc-600">© {new Date().getFullYear()} LB Mecânica Automotiva</div>
+          <div className="text-[9px] text-zinc-600 tracking-wider">Programado por André Pita</div>
+        </footer>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PageHeader from "../components/PageHeader";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { clientesService } from "../services/api";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ export default function Clientes() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [q, setQ] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const load = () => clientesService.list().then((d) => setItems(Array.isArray(d) ? d : []));
   useEffect(() => { load(); }, []);
@@ -24,10 +26,16 @@ export default function Clientes() {
     toast.success("Cliente salvo");
     setOpen(false); setEditing(null); load();
   };
-  const remove = async (c) => {
-    if (!window.confirm(`Excluir cliente ${c.nome}?`)) return;
-    await clientesService.remove(c.id);
-    toast.success("Cliente removido"); load();
+  const remove = (c) => {
+    setConfirmDelete(c);
+  };
+
+  const confirmRemove = async () => {
+    if (!confirmDelete) return;
+    await clientesService.remove(confirmDelete.id);
+    toast.success("Cliente removido");
+    setConfirmDelete(null);
+    load();
   };
 
   const filtered = items.filter((c) =>
@@ -48,22 +56,22 @@ export default function Clientes() {
       />
 
       <div className="lb-card overflow-hidden">
-        <div className="p-4 border-b border-[#1c1c1c] flex items-center gap-3">
-          <Search className="h-4 w-4 text-zinc-500" />
-          <input data-testid="cliente-search" className="lb-input !py-2" placeholder="Buscar por nome, documento ou telefone..." value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="p-3 sm:p-4 border-b border-[#1c1c1c] flex items-center gap-2 sm:gap-3">
+          <Search className="h-4 w-4 text-zinc-500 flex-shrink-0" />
+          <input data-testid="cliente-search" className="lb-input !py-2 text-sm" placeholder="Buscar por nome, documento ou telefone..." value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="overflow-x-auto">
           <table className="lb-table">
-            <thead><tr><th>Nome</th><th>Documento</th><th>Telefone</th><th>E-mail</th><th>Cadastro</th><th></th></tr></thead>
+            <thead><tr><th className="text-xs sm:text-sm">Nome</th><th className="text-xs sm:text-sm hidden sm:table-cell">Documento</th><th className="text-xs sm:text-sm hidden md:table-cell">Telefone</th><th className="text-xs sm:text-sm hidden lg:table-cell">E-mail</th><th className="text-xs sm:text-sm">Cadastro</th><th></th></tr></thead>
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-zinc-500">Nenhum cliente encontrado.</td></tr>}
               {filtered.map((c) => (
                 <tr key={c.id} data-testid={`cliente-row-${c.id}`}>
-                  <td className="font-medium text-zinc-100">{c.nome}</td>
-                  <td>{c.documento || "—"}</td>
-                  <td>{c.telefone || "—"}</td>
-                  <td>{c.email || "—"}</td>
-                  <td>{fmtDate(c.createdAt)}</td>
+                  <td className="font-medium text-zinc-100 text-sm">{c.nome}</td>
+                  <td className="hidden sm:table-cell text-sm">{c.documento || "—"}</td>
+                  <td className="hidden md:table-cell text-sm">{c.telefone || "—"}</td>
+                  <td className="hidden lg:table-cell text-sm">{c.email || "—"}</td>
+                  <td className="text-sm">{fmtDate(c.createdAt)}</td>
                   <td>
                     <div className="flex justify-end gap-1">
                       <button className="p-2 rounded hover:bg-[#1a1a1a] text-zinc-300 hover:text-[#ff6600]" onClick={() => startEdit(c)}><Pencil className="h-4 w-4" /></button>
@@ -79,11 +87,11 @@ export default function Clientes() {
 
       {open && (
         <Modal title={editing.id ? "Editar Cliente" : "Novo Cliente"} onClose={() => setOpen(false)}>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Inp label="Nome *" value={editing.nome} testid="cliente-form-nome" onChange={(v) => setEditing({ ...editing, nome: v })} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Inp label="Nome *" value={editing.nome} testid="cliente-form-nome" required onChange={(v) => setEditing({ ...editing, nome: v })} />
             <Inp label="CPF / CNPJ" value={editing.documento} onChange={(v) => setEditing({ ...editing, documento: v })} />
-            <Inp label="Telefone" value={editing.telefone} testid="cliente-form-telefone" onChange={(v) => setEditing({ ...editing, telefone: v })} />
-            <Inp label="E-mail" value={editing.email} onChange={(v) => setEditing({ ...editing, email: v })} />
+            <Inp label="Telefone" value={editing.telefone} testid="cliente-form-telefone" type="tel" onChange={(v) => setEditing({ ...editing, telefone: v })} />
+            <Inp label="E-mail" value={editing.email} type="email" onChange={(v) => setEditing({ ...editing, email: v })} />
             <Inp label="Endereço" value={editing.endereco} className="sm:col-span-2" onChange={(v) => setEditing({ ...editing, endereco: v })} />
           </div>
           <div className="flex justify-end gap-2 mt-5">
@@ -92,29 +100,70 @@ export default function Clientes() {
           </div>
         </Modal>
       )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Excluir Cliente"
+          message={`Tem certeza que deseja excluir o cliente ${confirmDelete.nome}? Esta ação não pode ser desfeita.`}
+          isDangerous
+          onConfirm={confirmRemove}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }
 
 export function Modal({ title, children, onClose, wide = false }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className={`lb-card p-6 w-full ${wide ? "max-w-4xl" : "max-w-2xl"} relative my-8`} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display text-2xl text-zinc-100">{title}</h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-[#ff6600]">✕</button>
+    <div 
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto" 
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div 
+        className={`lb-card p-4 sm:p-6 w-full ${wide ? "max-w-2xl sm:max-w-4xl" : "max-w-xl sm:max-w-2xl"} relative my-4 sm:my-8 max-h-[90vh] overflow-y-auto`} 
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4 sticky top-0 bg-inherit pb-2 border-b border-[#1c1c1c]">
+          <h3 id="modal-title" className="font-display text-xl sm:text-2xl text-zinc-100 truncate">{title}</h3>
+          <button 
+            onClick={onClose} 
+            className="text-zinc-400 hover:text-[#ff6600] ml-2 flex-shrink-0 text-xl"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
         </div>
-        {children}
+        <div className="overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>
   );
 }
 
-export function Inp({ label, value, onChange, type = "text", className = "", testid, placeholder, step }) {
+export function Inp({ label, value, onChange, type = "text", className = "", testid, placeholder, step, required = false, pattern }) {
   return (
     <label className={`block ${className}`}>
-      <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">{label}</div>
-      <input data-testid={testid} className="lb-input" type={type} value={value || ""} step={step} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">
+        {label}
+        {required && <span className="text-red-400 ml-1">*</span>}
+      </div>
+      <input 
+        data-testid={testid} 
+        className="lb-input" 
+        type={type} 
+        value={value || ""} 
+        step={step} 
+        placeholder={placeholder} 
+        pattern={pattern}
+        required={required}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={(e) => e.target.select()}
+      />
     </label>
   );
 }

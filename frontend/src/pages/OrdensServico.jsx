@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
+import ConfirmDialog from "../components/ConfirmDialog";
 import {
   osService, clientesService, veiculosService,
   servicosService, pecasService, uploadService, fileToDataURL,
@@ -24,6 +25,7 @@ export default function OrdensServico() {
   const [pecas, setPecas] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const load = async () => {
     const [o, c, v, s, p] = await Promise.all([
@@ -61,9 +63,16 @@ export default function OrdensServico() {
     toast.success("OS salva"); setOpen(false); load();
   };
 
-  const remove = async (it) => {
-    if (!window.confirm(`Excluir OS ${it.numero}?`)) return;
-    await osService.remove(it.id); toast.success("OS removida"); load();
+  const remove = (it) => {
+    setConfirmDelete(it);
+  };
+
+  const confirmRemove = async () => {
+    if (!confirmDelete) return;
+    await osService.remove(confirmDelete.id);
+    toast.success("OS removida");
+    setConfirmDelete(null);
+    load();
   };
 
   const exportPDF = (it) => {
@@ -153,6 +162,16 @@ export default function OrdensServico() {
           onClose={() => setOpen(false)} onSave={save}
         />
       )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Excluir Ordem de Serviço"
+          message={`Tem certeza que deseja excluir a OS ${confirmDelete.numero}? Esta ação não pode ser desfeita.`}
+          isDangerous
+          onConfirm={confirmRemove}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }
@@ -202,17 +221,17 @@ export function OSForm({ editing, setEditing, clientes, veiculos, servicos, peca
 
   return (
     <Modal title={`${titulo} ${editing.numero ? `— ${editing.numero}` : ""}`} onClose={onClose} wide>
-      <div className="grid lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <label className="block">
-          <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Cliente</div>
-          <select data-testid="os-form-cliente" className="lb-input" value={editing.clienteId} onChange={(e) => setEditing({ ...editing, clienteId: e.target.value, veiculoId: "" })}>
+          <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Cliente *</div>
+          <select data-testid="os-form-cliente" className="lb-input" value={editing.clienteId} onChange={(e) => setEditing({ ...editing, clienteId: e.target.value, veiculoId: "" })} required>
             <option value="">— Selecione —</option>
             {clientes.map((c) => (<option key={c.id} value={c.id}>{c.nome}</option>))}
           </select>
         </label>
         <label className="block">
-          <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Veículo</div>
-          <select data-testid="os-form-veiculo" className="lb-input" value={editing.veiculoId} onChange={(e) => setEditing({ ...editing, veiculoId: e.target.value })}>
+          <div className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Veículo *</div>
+          <select data-testid="os-form-veiculo" className="lb-input" value={editing.veiculoId} onChange={(e) => setEditing({ ...editing, veiculoId: e.target.value })} required>
             <option value="">— Selecione —</option>
             {veiculosCli.map((v) => (<option key={v.id} value={v.id}>{v.placa} — {v.marca} {v.modelo}</option>))}
           </select>
@@ -253,18 +272,18 @@ export function OSForm({ editing, setEditing, clientes, veiculos, servicos, peca
       </Section>
 
       <Section title="Fotos">
-        <div className="grid sm:grid-cols-3 gap-3 mb-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-3">
           {FOTO_TIPOS.map((t) => (
-            <label key={t} className="lb-card p-3 text-center cursor-pointer hover:border-[#ff6600] transition">
+            <label key={t} className="lb-card p-2 sm:p-3 text-center cursor-pointer hover:border-[#ff6600] transition">
               <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => onUpload(e, t)} />
-              <Camera className="h-5 w-5 mx-auto text-[#ff6600]" />
-              <div className="mt-1 text-xs uppercase tracking-wider text-zinc-300">{t}</div>
-              <div className="text-[10px] text-zinc-500 flex items-center justify-center gap-1 mt-1"><Upload className="h-3 w-3" />Enviar</div>
+              <Camera className="h-4 sm:h-5 w-4 sm:w-5 mx-auto text-[#ff6600]" />
+              <div className="mt-1 text-[10px] sm:text-xs uppercase tracking-wider text-zinc-300">{t}</div>
+              <div className="text-[9px] sm:text-[10px] text-zinc-500 flex items-center justify-center gap-1 mt-1"><Upload className="h-2.5 sm:h-3 w-2.5 sm:w-3" />Enviar</div>
             </label>
           ))}
         </div>
         {(editing.fotos || []).length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {(editing.fotos || []).map((f) => (
               <div key={f.id} className="relative group">
                 <img src={f.url} alt={f.nome} className="h-24 w-full object-cover rounded-md border border-[#262626]" />
@@ -302,21 +321,34 @@ function Section({ title, children }) {
 function LineTable({ rows, onChange, onRemove }) {
   if (!rows?.length) return <div className="text-xs text-zinc-500 italic">Nenhum item adicionado.</div>;
   return (
-    <div className="overflow-x-auto rounded-md border border-[#1c1c1c]">
-      <table className="lb-table">
-        <thead><tr><th>Descrição</th><th className="!w-20">Qtd</th><th className="!w-32">Valor Unit.</th><th className="!w-32">Subtotal</th><th /></tr></thead>
-        <tbody>
-          {rows.map((r, idx) => (
-            <tr key={r.id || idx}>
-              <td><input className="lb-input !py-1.5" value={r.nome} onChange={(e) => onChange(idx, "nome", e.target.value)} /></td>
-              <td><input className="lb-input !py-1.5" type="number" min="1" value={r.quantidade ?? 1} onFocus={(e) => e.target.select()} onChange={(e) => onChange(idx, "quantidade", e.target.value === "" ? "" : Number(e.target.value))} /></td>
-              <td><input className="lb-input !py-1.5" type="number" step="0.01" value={r.valor ?? 0} onFocus={(e) => e.target.select()} onChange={(e) => onChange(idx, "valor", e.target.value === "" ? "" : Number(e.target.value))} /></td>
-              <td className="font-mono text-[#d4af37]">{brl(Number(r.valor || 0) * Number(r.quantidade || 1))}</td>
-              <td><button className="text-zinc-400 hover:text-red-400" onClick={() => onRemove(idx)}><Trash2 className="h-4 w-4" /></button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {rows.map((r, idx) => (
+        <div key={r.id || idx} className="lb-card p-3 space-y-2">
+          <div className="grid grid-cols-1 gap-2">
+            <div>
+              <label className="text-xs text-zinc-400 uppercase tracking-wider mb-1 block">Descrição</label>
+              <input className="lb-input !py-2 text-sm" value={r.nome} onChange={(e) => onChange(idx, "nome", e.target.value)} placeholder="Nome do serviço ou peça" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-zinc-400 uppercase tracking-wider mb-1 block">Qtd</label>
+                <input className="lb-input !py-2 text-sm" type="number" min="1" value={r.quantidade ?? 1} onFocus={(e) => e.target.select()} onChange={(e) => onChange(idx, "quantidade", e.target.value === "" ? "" : Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 uppercase tracking-wider mb-1 block">Valor Unit.</label>
+                <input className="lb-input !py-2 text-sm" type="number" step="0.01" value={r.valor ?? 0} onFocus={(e) => e.target.select()} onChange={(e) => onChange(idx, "valor", e.target.value === "" ? "" : Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 uppercase tracking-wider mb-1 block">Subtotal</label>
+                <div className="lb-input !py-2 text-sm font-mono text-[#d4af37] bg-[#0a0a0a] flex items-center">{brl(Number(r.valor || 0) * Number(r.quantidade || 1))}</div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button className="text-zinc-400 hover:text-red-400 p-2" onClick={() => onRemove(idx)} title="Remover item"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
