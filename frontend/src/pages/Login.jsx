@@ -18,11 +18,18 @@ export default function Login() {
     if (!usuario || !senha) return toast.error("Informe usuário e senha");
     setLoading(true);
     try {
-      const res = await login(usuario.trim(), senha);
-      toast.success(`Acesso liberado (${res.source === "api" ? "API" : "modo local"})`);
+      await login(usuario.trim(), senha);
+      toast.success("Acesso liberado");
       navigate("/dashboard");
     } catch (err) {
-      toast.error(err.message || "Falha no login");
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        toast.error("Usuário ou senha incorretos");
+      } else if (err?.code === "ECONNABORTED" || !err?.response) {
+        toast.error("Servidor indisponível. Tente novamente em alguns segundos.");
+      } else {
+        toast.error(err?.message || "Falha no login");
+      }
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import "@/App.css";
@@ -7,6 +8,8 @@ import { CompanyProvider } from "@/contexts/CompanyContext";
 
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
+import ConnectionBanner from "@/components/ConnectionBanner";
+import { wakeUp } from "@/services/api";
 
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -30,10 +33,15 @@ function Shell({ children }) {
 }
 
 function App() {
+  // Wake the Render server up as soon as the app loads so the first
+  // login/CRUD call doesn't time out on a cold start.
+  useEffect(() => { wakeUp(); }, []);
+
   return (
     <AuthProvider>
       <CompanyProvider>
         <BrowserRouter>
+          <ConnectionBanner />
           <Toaster theme="dark" position="top-right" richColors closeButton />
           <Routes>
             <Route path="/login" element={<Login />} />

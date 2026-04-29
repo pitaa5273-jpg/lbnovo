@@ -1,96 +1,106 @@
 import axios from "axios";
-import { localDB } from "./localDB";
 
 export const API_BASE = "https://lbnovo.onrender.com";
 
+// Render free tier puts the server to sleep after ~15 min of inactivity.
+// First request after a cold start can take 30–60s, so we use a generous
+// timeout. Subsequent requests are fast.
+const REQUEST_TIMEOUT_MS = 60000;
+
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 6000,
+  timeout: REQUEST_TIMEOUT_MS,
 });
 
-// Short-circuit flag: once an API call fails (CORS / 404 / network), skip
-// subsequent network attempts in this session and use localStorage directly.
-let apiUnavailable = false;
-export const isApiAvailable = () => !apiUnavailable;
-export const markApiDown = () => { apiUnavailable = true; };
+// ---------- Connection status (observable) ----------
+// status: "unknown" | "connecting" | "online" | "offline"
+const listeners = new Set();
+let connectionStatus = "unknown";
 
+export const getConnectionStatus = () => connectionStatus;
+
+export function subscribeConnection(fn) {
+  listeners.add(fn);
+  fn(connectionStatus);
+  return () => listeners.delete(fn);
+}
+
+function setStatus(s) {
+  if (connectionStatus === s) return;
+  connectionStatus = s;
+  listeners.forEach((fn) => {
+    try { fn(s); } catch { /* ignore */ }
+  });
+}
+
+// ---------- Auth header ----------
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("lb_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Generic safe-call: tries the API (unless previously marked down); on failure falls back.
-async function safe(promiseFactory, fallback) {
-  if (apiUnavailable) {
-    if (typeof fallback === "function") return fallback();
-  }
-  try {
-    const res = await promiseFactory();
-    return res.data;
-  } catch (err) {
-    apiUnavailable = true;
-    if (typeof fallback === "function") return fallback();
-    throw err;
-  }
+// Mark online on any successful response, offline on any network error.
+api.interceptors.response.use(
+  (res) => { setStatus("online"); return res; },
+  (err) => {
+    // 4xx/5xx with a response means the server IS online (just rejected us)
+    if (err && err.response) setStatus("online");
+    else setStatus("offline");
+    return Promise.reject(err);
+  },
+);
+
+// ---------- Wake-up ping ----------
+// Call once on app boot to wake the Render dyno before the user logs in.
+let wakeupPromise = null;
+export function wakeUp() {
+  if (wakeupPromise) return wakeupPromise;
+  setStatus("connecting");
+  wakeupPromise = axios
+    .get(`${API_BASE}/`, { timeout: REQUEST_TIMEOUT_MS })
+    .then(() => { setStatus("online"); return true; })
+    .catch(() => { setStatus("offline"); return false; })
+    .finally(() => {
+      // Allow a fresh wake-up attempt later if needed.
+      setTimeout(() => { wakeupPromise = null; }, 5000);
+    });
+  return wakeupPromise;
 }
 
 // ---------- AUTH ----------
+// No fake/local token fallback. If the API is down, login fails loudly.
 export const authService = {
   async login(usuario, senha) {
-    try {
-      const res = await api.post("/login", { usuario, senha });
-      const token = res?.data?.token || res?.data?.access_token;
-      if (token) {
-        return { token, source: "api" };
-      }
-    } catch (_) { /* ignore, fallback below */ }
-
-    // Fallback: hardcoded local credentials
-    if (usuario === "lbmecanica" && senha === "eaixuxu") {
-      const fakeToken = `lb_${btoa(usuario + ":" + Date.now())}`;
-      return { token: fakeToken, source: "local" };
-    }
-    throw new Error("Credenciais inválidas");
+    const res = await api.post("/login", { usuario, senha });
+    const token = res?.data?.token || res?.data?.access_token;
+    if (!token) throw new Error("Resposta de login inválida do servidor");
+    return { token, source: "api" };
   },
 };
 
-// ---------- factory: CRUD module that auto-falls back to localDB ----------
+// ---------- CRUD factory ----------
+// Every operation hits the backend. No localStorage fallback for data.
 function makeCrud(resource) {
-  const local = localDB(resource);
   return {
-    list: () => safe(() => api.get(`/${resource}`), () => local.list()),
-    get: (id) => safe(() => api.get(`/${resource}/${id}`), () => local.get(id)),
-    create: async (data) => {
-      if (apiUnavailable) return local.create(data);
-      try {
-        const res = await api.post(`/${resource}`, data);
-        const created = res.data || data;
-        local.upsert(created);
-        return created;
-      } catch {
-        apiUnavailable = true;
-        return local.create(data);
-      }
+    async list() {
+      const res = await api.get(`/${resource}`);
+      return Array.isArray(res.data) ? res.data : [];
     },
-    update: async (id, data) => {
-      if (apiUnavailable) return local.update(id, data);
-      try {
-        const res = await api.put(`/${resource}/${id}`, data);
-        const updated = res.data || { id, ...data };
-        local.upsert(updated);
-        return updated;
-      } catch {
-        apiUnavailable = true;
-        return local.update(id, data);
-      }
+    async get(id) {
+      const res = await api.get(`/${resource}/${id}`);
+      return res.data;
     },
-    remove: async (id) => {
-      if (!apiUnavailable) {
-        try { await api.delete(`/${resource}/${id}`); }
-        catch { apiUnavailable = true; }
-      }
-      local.remove(id);
+    async create(data) {
+      const res = await api.post(`/${resource}`, data);
+      return res.data || data;
+    },
+    async update(id, data) {
+      const res = await api.put(`/${resource}/${id}`, data);
+      return res.data || { id, ...data };
+    },
+    async remove(id) {
+      await api.delete(`/${resource}/${id}`);
       return { id };
     },
   };
@@ -108,23 +118,13 @@ export const garantiasService = makeCrud("garantias");
 // ---------- UPLOAD ----------
 export const uploadService = {
   async upload(file, tipo = "manutencao") {
-    if (apiUnavailable) {
-      const dataUrl = await fileToDataURL(file);
-      return { url: dataUrl, name: file.name, tipo, source: "local" };
-    }
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("tipo", tipo);
-      const res = await api.post("/upload", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      return res.data;
-    } catch {
-      apiUnavailable = true;
-      const dataUrl = await fileToDataURL(file);
-      return { url: dataUrl, name: file.name, tipo, source: "local" };
-    }
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("tipo", tipo);
+    const res = await api.post("/upload", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
   },
 };
 

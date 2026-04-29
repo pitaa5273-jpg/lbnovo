@@ -4,7 +4,7 @@ import {
   clientesService, veiculosService, osService, servicosService,
   pecasService, orcamentosService, financeiroService, garantiasService,
 } from "../services/api";
-import { localDB, getEmpresa, setEmpresa } from "../services/localDB";
+import { useCompany } from "../contexts/CompanyContext";
 import { Download, Upload, Database } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,12 +21,17 @@ const RESOURCES = [
 
 export default function Backup() {
   const fileRef = useRef();
+  const { empresa, update: updateEmpresa } = useCompany();
 
   const exportar = async () => {
-    const out = { exportedAt: new Date().toISOString(), empresa: getEmpresa(), data: {} };
-    for (const r of RESOURCES) {
-      try { out.data[r.key] = (await r.svc.list()) || []; }
-      catch { out.data[r.key] = []; }
+    const out = { exportedAt: new Date().toISOString(), empresa, data: {} };
+    try {
+      for (const r of RESOURCES) {
+        out.data[r.key] = (await r.svc.list()) || [];
+      }
+    } catch (err) {
+      toast.error("Falha ao baixar dados do servidor para o backup");
+      return;
     }
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -39,22 +44,31 @@ export default function Backup() {
 
   const importar = async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
-    if (!window.confirm("Substituir os dados atuais pelos dados do arquivo?")) { e.target.value = ""; return; }
+    if (!window.confirm("Enviar os dados do arquivo para o servidor?")) { e.target.value = ""; return; }
     try {
       const txt = await file.text();
       const json = JSON.parse(txt);
-      if (json.empresa) setEmpresa(json.empresa);
+      if (json.empresa) updateEmpresa(json.empresa);
+
+      let okCount = 0;
+      let failCount = 0;
       for (const r of RESOURCES) {
         const arr = json.data?.[r.key];
-        if (Array.isArray(arr)) {
-          localDB(r.key).replaceAll(arr);
-          // attempt to push to API as well
-          for (const item of arr) {
-            try { await r.svc.create(item); } catch { /* ignore */ }
+        if (!Array.isArray(arr)) continue;
+        for (const item of arr) {
+          try {
+            await r.svc.create(item);
+            okCount++;
+          } catch {
+            failCount++;
           }
         }
       }
-      toast.success("Backup restaurado com sucesso");
+      if (failCount === 0) {
+        toast.success(`Backup restaurado: ${okCount} registros enviados`);
+      } else {
+        toast.warning(`Restauração parcial: ${okCount} ok, ${failCount} falharam`);
+      }
       setTimeout(() => window.location.reload(), 800);
     } catch (err) {
       toast.error("Falha ao importar: arquivo inválido");
@@ -79,7 +93,7 @@ export default function Backup() {
         <div className="lb-card p-6">
           <Database className="h-6 w-6 text-[#d4af37]" />
           <h3 className="font-display text-2xl mt-3 text-zinc-100">Importar backup</h3>
-          <p className="text-sm text-zinc-400 mt-1">Substitui os dados atuais pelos dados do arquivo JSON. Faça um backup antes.</p>
+          <p className="text-sm text-zinc-400 mt-1">Envia os dados do arquivo JSON para o servidor. Faça um backup antes.</p>
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={importar} data-testid="backup-import-input" />
           <button data-testid="backup-import" className="lb-btn-ghost mt-4" onClick={() => fileRef.current?.click()}>
             <Upload className="h-4 w-4 inline mr-2" />Selecionar arquivo
