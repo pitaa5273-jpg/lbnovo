@@ -126,6 +126,89 @@ function signatureBlock(doc) {
   doc.text("LB Mecânica Automotiva", 150, y + 5, { align: "center" });
 }
 
+function drawPhotosSection(doc, fotos, startY) {
+  if (!fotos || fotos.length === 0) return startY;
+  
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  let y = startY + 6;
+  
+  // Verificar se precisa de nova página
+  if (y > pageH - 100) {
+    doc.addPage();
+    y = 20;
+  }
+  
+  // Título da seção de fotos
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...DARK);
+  doc.text("FOTOS DO SERVIÇO", 14, y);
+  y += 8;
+  
+  // Agrupar fotos por tipo
+  const fotosPorTipo = {};
+  fotos.forEach((foto) => {
+    const tipo = foto.tipo || "outros";
+    if (!fotosPorTipo[tipo]) fotosPorTipo[tipo] = [];
+    fotosPorTipo[tipo].push(foto);
+  });
+  
+  // Renderizar cada tipo de foto
+  Object.entries(fotosPorTipo).forEach(([tipo, fotosTipo]) => {
+    // Subtítulo do tipo
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...ORANGE);
+    doc.text(`${tipo.charAt(0).toUpperCase() + tipo.slice(1)}:`, 14, y);
+    y += 6;
+    
+    // Renderizar fotos em grid
+    let xPos = 14;
+    const fotoWidth = 35;
+    const fotoHeight = 35;
+    const spacing = 6;
+    const maxFotosPerLine = Math.floor((pageW - 28) / (fotoWidth + spacing));
+    let fotoCount = 0;
+    
+    fotosTipo.forEach((foto) => {
+      // Verificar se precisa de nova linha
+      if (fotoCount > 0 && fotoCount % maxFotosPerLine === 0) {
+        y += fotoHeight + 4;
+        xPos = 14;
+      }
+      
+      // Verificar se precisa de nova página
+      if (y + fotoHeight > pageH - 30) {
+        doc.addPage();
+        y = 20;
+        xPos = 14;
+      }
+      
+      // Adicionar imagem
+      try {
+        if (foto.url && typeof foto.url === "string") {
+          doc.addImage(foto.url, "JPEG", xPos, y, fotoWidth, fotoHeight);
+        }
+      } catch (e) {
+        // Se falhar ao carregar a imagem, desenhar um placeholder
+        doc.setDrawColor(200);
+        doc.rect(xPos, y, fotoWidth, fotoHeight);
+        doc.setFontSize(7);
+        doc.setTextColor(150);
+        doc.text("Foto", xPos + fotoWidth / 2, y + fotoHeight / 2, { align: "center" });
+      }
+      
+      xPos += fotoWidth + spacing;
+      fotoCount++;
+    });
+    
+    y += fotoHeight + 6;
+  });
+  
+  return y;
+}
+
 // ===== PUBLIC GENERATORS =====
 
 export function gerarPDF_OS({ empresa, os, cliente, veiculo }) {
@@ -189,6 +272,12 @@ export function gerarPDF_OS({ empresa, os, cliente, veiculo }) {
       margin: { left: 14, right: 14 },
     });
     y = doc.lastAutoTable.finalY + 4;
+  }
+
+  // Fotos
+  const fotos = os?.fotos || [];
+  if (fotos.length > 0) {
+    y = drawPhotosSection(doc, fotos, y);
   }
 
   // Total
