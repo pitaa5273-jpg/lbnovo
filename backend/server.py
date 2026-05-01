@@ -322,6 +322,67 @@ async def upload_file(file: UploadFile = File(...), tipo: str = Form("manutencao
 
 
 # -----------------------------------------------------------------------------
+# Chatvolt Integration
+# -----------------------------------------------------------------------------
+@app.post("/chatvolt/consulta-os")
+async def chatvolt_consulta_os(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+    """
+    Endpoint para o Chatvolt consultar o status de uma OS ou Placa.
+    Não requer autenticação Bearer para facilitar a integração com o Chatvolt HTTP Tool,
+    mas você pode adicionar uma API Key simples se desejar segurança extra.
+    """
+    identifier = payload.get("identifier", "").strip().upper()
+    if not identifier:
+        return {"status": "error", "message": "Por favor, informe a placa ou o número da OS."}
+
+    # 1. Tentar buscar por ID da OS (UUID)
+    try:
+        os_uuid = uuid.UUID(identifier)
+        ModelOS = MODELS["os"]
+        result = await db.execute(select(ModelOS).where(ModelOS.id == os_uuid))
+        row = result.scalar_one_or_none()
+        if row:
+            data = row.data or {}
+            status = data.get("status", "Não informado")
+            cliente = data.get("clienteNome", "Cliente")
+            veiculo = data.get("veiculoPlaca", "veículo")
+            return {
+                "status": "success",
+                "message": f"Olá! A Ordem de Serviço {identifier} ({veiculo}) do cliente {cliente} está com o status: {status}."
+            }
+    except ValueError:
+        pass # Não é um UUID, continuar busca por placa ou número customizado
+
+    # 2. Tentar buscar por Placa ou Número da OS dentro do campo 'data' (JSONB)
+    # Como os dados estão dentro do JSONB, vamos buscar nas tabelas 'os' e 'veiculos'
+    
+    # Busca na tabela de OS por placa ou numeroOS
+    ModelOS = MODELS["os"]
+    # Nota: Como o schema é dinâmico, buscamos onde o campo 'data' contém o identificador
+    result = await db.execute(select(ModelOS))
+    all_os = result.scalars().all()
+    
+    for row in all_os:
+        data = row.data or {}
+        # Verifica se o identificador bate com a placa ou numeroOS salvo no JSON
+        if data.get("veiculoPlaca", "").upper() == identifier or \
+           str(data.get("numeroOS", "")).upper() == identifier or \
+           str(data.get("codigo", "")).upper() == identifier:
+            
+            status = data.get("status", "Em andamento")
+            veiculo = data.get("veiculoPlaca", "veículo")
+            return {
+                "status": "success",
+                "message": f"Localizei a OS para o veículo {veiculo}. O status atual é: {status}."
+            }
+
+    return {
+        "status": "not_found",
+        "message": f"Desculpe, não encontrei nenhuma Ordem de Serviço ativa para '{identifier}'. Verifique se o número ou placa estão corretos."
+    }
+
+
+# -----------------------------------------------------------------------------
 # Erros amigáveis
 # -----------------------------------------------------------------------------
 @app.exception_handler(HTTPException)
